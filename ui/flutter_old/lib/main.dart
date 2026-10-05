@@ -92,7 +92,7 @@ Future<void> init(StartupArgs args) async {
       await hotKeyManager.register(
         hotKey,
         keyDownHandler: (hotKey) {
-          windowManager.hide();
+          windowManager.close();
         },
       );
     }

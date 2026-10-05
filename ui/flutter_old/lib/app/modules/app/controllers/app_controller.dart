@@ -137,9 +137,24 @@ class AppController extends GetxController with WindowListener, TrayListener {
   @override
   void onWindowClose() async {
     final isPreventClose = await windowManager.isPreventClose();
-    if (isPreventClose) {
-      windowManager.hide();
+    if (!isPreventClose) {
+      return;
     }
+    // Menubar mode expects the app to stay resident after the window closes.
+    if (Util.isMacos() && Database.instance.getRunAsMenubarApp()) {
+      windowManager.hide();
+      return;
+    }
+    await _exitApp();
+  }
+
+  Future<void> _exitApp() async {
+    try {
+      await LibgopeedBoot.instance.stop();
+    } catch (e) {
+      logger.w("libgopeed stop fail", e);
+    }
+    windowManager.destroy();
   }
 
   // According to the system_manager document, make sure to call setState once on the onWindowFocus event.
@@ -325,14 +340,7 @@ class AppController extends GetxController with WindowListener, TrayListener {
       MenuItem.separator(),
       MenuItem(
         label: 'exit'.tr,
-        onClick: (menuItem) async {
-          try {
-            await LibgopeedBoot.instance.stop();
-          } catch (e) {
-            logger.w("libgopeed stop fail", e);
-          }
-          windowManager.destroy();
-        },
+        onClick: (menuItem) => _exitApp(),
       ),
     ]);
     if (!Util.isLinux()) {
