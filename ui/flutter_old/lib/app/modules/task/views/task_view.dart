@@ -62,18 +62,15 @@ class TaskView extends GetView<TaskController> {
                 onTap: (index) {
                   if (controller.tabIndex.value != index) {
                     controller.tabIndex.value = index;
-                    final downloadingController =
-                        Get.find<TaskDownloadingController>();
-                    final downloadedController =
-                        Get.find<TaskDownloadedController>();
+                    // Keep both lists polling so the badge counts stay live on
+                    // the inactive tab too; start() only triggers an
+                    // immediate refresh on the tab being switched to.
                     switch (index) {
                       case 0:
-                        downloadingController.start();
-                        downloadedController.stop();
+                        Get.find<TaskDownloadingController>().start();
                         break;
                       case 1:
-                        downloadingController.stop();
-                        downloadedController.start();
+                        Get.find<TaskDownloadedController>().start();
                         break;
                     }
                   }
