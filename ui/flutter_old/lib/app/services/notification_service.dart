@@ -71,6 +71,18 @@ class NotificationService extends GetxService {
     await flutterLocalNotificationsPlugin.initialize(
       settings: initializationSettings,
     );
+
+    // macOS notification authorization is bound to the code signature, so the
+    // grant of the official Developer-ID build does not carry over to the
+    // ad-hoc signed personal build — request it explicitly. No-op once the
+    // user has answered the prompt.
+    if (Util.isMacos() &&
+        appController.downloaderConfig.value.extra.desktopNotification) {
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              MacOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(alert: true, sound: true);
+    }
   }
 
   @override
