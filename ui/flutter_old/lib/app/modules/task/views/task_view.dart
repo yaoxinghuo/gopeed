@@ -37,12 +37,26 @@ class TaskView extends GetView<TaskController> {
             preferredSize: const Size.fromHeight(56),
             child: AppBar(
               bottom: TabBar(
-                tabs: const [
+                tabs: [
                   Tab(
-                    icon: Icon(Icons.file_download),
+                    icon: Obx(() => Badge(
+                          isLabelVisible: Get.find<TaskDownloadingController>()
+                              .tasks
+                              .isNotEmpty,
+                          label: Text(
+                              '${Get.find<TaskDownloadingController>().tasks.length}'),
+                          child: const Icon(Icons.file_download),
+                        )),
                   ),
                   Tab(
-                    icon: Icon(Icons.done),
+                    icon: Obx(() => Badge(
+                          isLabelVisible: Get.find<TaskDownloadedController>()
+                              .tasks
+                              .isNotEmpty,
+                          label: Text(
+                              '${Get.find<TaskDownloadedController>().tasks.length}'),
+                          child: const Icon(Icons.done),
+                        )),
                   ),
                 ],
                 onTap: (index) {
