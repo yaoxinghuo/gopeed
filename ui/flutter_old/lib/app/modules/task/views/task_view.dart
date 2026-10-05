@@ -43,6 +43,7 @@ class TaskView extends GetView<TaskController> {
                           isLabelVisible: Get.find<TaskDownloadingController>()
                               .tasks
                               .isNotEmpty,
+                          backgroundColor: Theme.of(context).primaryColor,
                           label: Text(
                               '${Get.find<TaskDownloadingController>().tasks.length}'),
                           child: const Icon(Icons.file_download),
@@ -53,6 +54,7 @@ class TaskView extends GetView<TaskController> {
                           isLabelVisible: Get.find<TaskDownloadedController>()
                               .tasks
                               .isNotEmpty,
+                          backgroundColor: Theme.of(context).primaryColor,
                           label: Text(
                               '${Get.find<TaskDownloadedController>().tasks.length}'),
                           child: const Icon(Icons.done),
