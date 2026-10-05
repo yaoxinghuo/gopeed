@@ -30,12 +30,30 @@ class BuildTaskListView extends GetView {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            Get.rootDelegate.toNamed(Routes.CREATE);
-          },
-          tooltip: 'create'.tr,
-          child: const Icon(Icons.add),
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Obx(() => tasks.isEmpty
+                ? const SizedBox.shrink()
+                : FloatingActionButton(
+                    heroTag: 'clearTasks',
+                    mini: true,
+                    onPressed: () =>
+                        showDeleteDialog(tasks.map((e) => e.id).toList()),
+                    tooltip: 'deleteTask'
+                        .trParams({'count': tasks.length.toString()}),
+                    child: const Icon(Icons.delete_sweep),
+                  )),
+            const SizedBox(height: 12),
+            FloatingActionButton(
+              heroTag: 'createTask',
+              onPressed: () {
+                Get.rootDelegate.toNamed(Routes.CREATE);
+              },
+              tooltip: 'create'.tr,
+              child: const Icon(Icons.add),
+            ),
+          ],
         ),
         body: Obx(() {
           return buildTaskList(context, tasks);
@@ -54,6 +72,53 @@ class BuildTaskListView extends GetView {
     );
   }
 
+  Future<void> showDeleteDialog(List<String> ids) {
+    final appController = Get.find<AppController>();
+
+    final context = Get.context!;
+
+    return showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+              title:
+                  Text('deleteTask'.trParams({'count': ids.length.toString()})),
+              content: Obx(() => CheckboxListTile(
+                  value: appController
+                      .downloaderConfig.value.extra.lastDeleteTaskKeep,
+                  title: Text('deleteTaskTip'.tr,
+                      style: context.textTheme.bodyLarge),
+                  onChanged: (v) {
+                    appController.downloaderConfig.update((val) {
+                      val!.extra.lastDeleteTaskKeep = v!;
+                    });
+                  })),
+              actions: [
+                TextButton(
+                  child: Text('cancel'.tr),
+                  onPressed: () => Get.back(),
+                ),
+                TextButton(
+                  child: Text(
+                    'confirm'.tr,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
+                  onPressed: () async {
+                    try {
+                      final force = !appController
+                          .downloaderConfig.value.extra.lastDeleteTaskKeep;
+                      await appController.saveConfig();
+                      await deleteTasks(ids, force);
+                      Get.back();
+                    } catch (e) {
+                      showErrorMessage(e);
+                    }
+                  },
+                ),
+              ],
+            ));
+  }
+
   Widget item(BuildContext context, Task task) {
     bool isDone() {
       return task.status == Status.done;
@@ -69,53 +134,6 @@ class BuildTaskListView extends GetView {
 
     bool isFolderTask() {
       return task.isFolder;
-    }
-
-    Future<void> showDeleteDialog(List<String> ids) {
-      final appController = Get.find<AppController>();
-
-      final context = Get.context!;
-
-      return showDialog<void>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-                title: Text(
-                    'deleteTask'.trParams({'count': ids.length.toString()})),
-                content: Obx(() => CheckboxListTile(
-                    value: appController
-                        .downloaderConfig.value.extra.lastDeleteTaskKeep,
-                    title: Text('deleteTaskTip'.tr,
-                        style: context.textTheme.bodyLarge),
-                    onChanged: (v) {
-                      appController.downloaderConfig.update((val) {
-                        val!.extra.lastDeleteTaskKeep = v!;
-                      });
-                    })),
-                actions: [
-                  TextButton(
-                    child: Text('cancel'.tr),
-                    onPressed: () => Get.back(),
-                  ),
-                  TextButton(
-                    child: Text(
-                      'confirm'.tr,
-                      style: const TextStyle(color: Colors.redAccent),
-                    ),
-                    onPressed: () async {
-                      try {
-                        final force = !appController
-                            .downloaderConfig.value.extra.lastDeleteTaskKeep;
-                        await appController.saveConfig();
-                        await deleteTasks(ids, force);
-                        Get.back();
-                      } catch (e) {
-                        showErrorMessage(e);
-                      }
-                    },
-                  ),
-                ],
-              ));
     }
 
     Future<void> showUpdateUrlDialog(BuildContext context, Task task) async {
