@@ -107,22 +107,6 @@ func Start(startCfg *model.StartConfig) (port int, err error) {
 	if err = initializeCore(startCfg); err != nil {
 		return 0, err
 	}
-	if startCfg.NativeMode {
-		storedConfig, configErr := Downloader.GetConfig()
-		if configErr != nil {
-			return 0, configErr
-		}
-		apiConfig := storedConfig.API
-		if apiConfig == nil {
-			apiConfig = (&base.APIServerConfig{}).Init()
-		} else {
-			apiConfig.Init()
-		}
-		startCfg.ApiEnable = &apiConfig.Enable
-		startCfg.Network = apiConfig.Network
-		startCfg.Address = apiConfig.Address
-		startCfg.ApiToken = apiConfig.Token
-	}
 	if err := Downloader.ContinueOnStartup(); err != nil {
 		Downloader.Logger.Warn().Err(err).Msg("auto-start tasks failed")
 	}
@@ -137,8 +121,8 @@ func Start(startCfg *model.StartConfig) (port int, err error) {
 	}
 	port, startErr := apiServer.startWithConfigLocked(startCfg, config)
 	if startErr != nil && startCfg.NativeMode {
-		Downloader.Logger.Error().Err(startErr).Msg("optional API server failed to start")
-		return 0, nil
+		Downloader.Logger.Error().Err(startErr).Msg("API server failed to start")
+		return 0, startErr
 	}
 	return port, startErr
 }

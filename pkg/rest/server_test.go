@@ -2,6 +2,7 @@ package rest
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/json"
 	"errors"
@@ -961,6 +962,63 @@ func TestWebSessionStoreExpiry(t *testing.T) {
 	now = expiresAt
 	if store.valid(sessionID) {
 		t.Fatal("expired session should be invalid")
+	}
+}
+
+func TestStartNativeModeUnixSocket(t *testing.T) {
+	// macOS unix socket paths are limited to ~104 chars, so use a short tmp
+	// dir instead of t.TempDir() which is too long there.
+	sockDir, err := os.MkdirTemp("/tmp", "gopeed-rest-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(sockDir)
+	socketPath := filepath.Join(sockDir, "gopeed.sock")
+
+	cfg := &model.StartConfig{
+		Network:    "unix",
+		Address:    socketPath,
+		Storage:    model.StorageMem,
+		NativeMode: true,
+	}
+	cfg.Init()
+	defer Stop()
+	if _, err := Start(cfg); err != nil {
+		t.Fatalf("Start() err = %v", err)
+	}
+
+	// In native mode the listener is the UI transport itself, so it must
+	// always bind the address passed in startCfg regardless of the persisted
+	// API server settings.
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, "unix", socketPath)
+			},
+		},
+	}
+	resp, err := httpClient.Get("http://unix/api/v1/info")
+	if err != nil {
+		t.Fatalf("request over unix socket failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unix socket API status = %v, want %v", resp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestStartNativeModeListenError(t *testing.T) {
+	cfg := &model.StartConfig{
+		Network:    "unix",
+		Address:    "/nonexistent-dir/gopeed.sock",
+		Storage:    model.StorageMem,
+		NativeMode: true,
+	}
+	cfg.Init()
+	defer Stop()
+	if _, err := Start(cfg); err == nil {
+		t.Fatal("Start() should return an error when the API listener cannot bind")
 	}
 }
 
