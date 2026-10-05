@@ -29,10 +29,16 @@ jobs:
       upload_url: ${{ steps.get-release.outputs.upload_url }}
 
     steps:
-      - uses: monkeyWie/get-latest-release@v2.1
-        id: get-release
+      - uses: actions/checkout@v3
         with:
-          myToken: ${{ github.token }}
+          fetch-depth: 0
+      - id: get-release
+        run: |
+          git fetch --tags --force
+          VERSION=$(git describe --tags --always 2>/dev/null | sed 's/^v//')
+          VERSION=${VERSION:-dev}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "upload_url=" >> "$GITHUB_OUTPUT"
 
   build-windows:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'windows' }}
@@ -96,10 +102,10 @@ jobs:
           Invoke-WebRequest -Uri "https://github.com/jrsoftware/issrc/raw/main/Files/Languages/ChineseSimplified.isl" -OutFile "ChineseSimplified.isl"
           mv ChineseSimplified.isl "C:\Program Files (x86)\Inno Setup 6\Languages\"
 
-          go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$env:VERSION" -buildmode=c-shared -o ui/flutter/windows/libgopeed.dll github.com/GopeedLab/gopeed/bind/desktop
-          go build -ldflags="-w -s" -o ui/flutter/assets/exec/host.exe github.com/GopeedLab/gopeed/cmd/host
-          go build -ldflags="-w -s" -o ui/flutter/assets/exec/updater.exe github.com/GopeedLab/gopeed/cmd/updater
-          cd ui/flutter
+          go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$env:VERSION" -buildmode=c-shared -o ui/flutter_old/windows/libgopeed.dll github.com/GopeedLab/gopeed/bind/desktop
+          go build -ldflags="-w -s" -o ui/flutter_old/assets/exec/host.exe github.com/GopeedLab/gopeed/cmd/host
+          go build -ldflags="-w -s" -o ui/flutter_old/assets/exec/updater.exe github.com/GopeedLab/gopeed/cmd/updater
+          cd ui/flutter_old
           $TAG = "v$env:VERSION"
           flutter build windows --dart-define="UPDATE_CHANNEL=windowsPortable" --dart-define="GA4_MEASUREMENT_ID=${{ env.GA4_MEASUREMENT_ID }}" --dart-define="GA4_API_SECRET=${{ env.GA4_API_SECRET }}"
           $system = "C:\Windows\System32"
@@ -190,7 +196,7 @@ jobs:
         uses: shogo82148/actions-upload-release-asset@v1.9.2
         with:
           upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: ui/flutter/build/windows/Output/*
+          asset_path: ui/flutter_old/build/windows/Output/*
           overwrite: true
   build-macos-amd64-lib:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'macos' }}
@@ -220,7 +226,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        channel: [arm64, amd64, universal]
+        channel: [universal]
     needs: [get-release, build-macos-amd64-lib]
     steps:
       - uses: actions/checkout@v3
@@ -240,45 +246,45 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: macos-amd64-lib
-          path: ui/flutter/lib-amd64
+          path: ui/flutter_old/lib-amd64
       - if: ${{ matrix.channel == 'arm64' }}
         name: Build Arm64 Libraries
         run: |
-          go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o ui/flutter/macos/Frameworks/libgopeed.dylib github.com/GopeedLab/gopeed/bind/desktop
-          go build -ldflags="-w -s" -o ui/flutter/assets/exec/host github.com/GopeedLab/gopeed/cmd/host
-          go build -ldflags="-w -s" -o ui/flutter/assets/exec/updater github.com/GopeedLab/gopeed/cmd/updater
+          go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o ui/flutter_old/macos/Frameworks/libgopeed.dylib github.com/GopeedLab/gopeed/bind/desktop
+          go build -ldflags="-w -s" -o ui/flutter_old/assets/exec/host github.com/GopeedLab/gopeed/cmd/host
+          go build -ldflags="-w -s" -o ui/flutter_old/assets/exec/updater github.com/GopeedLab/gopeed/cmd/updater
       - if: ${{ matrix.channel == 'amd64' }}
         name: Build Amd64 Libraries
         run: |
-          mkdir -p ui/flutter/macos/Frameworks
+          mkdir -p ui/flutter_old/macos/Frameworks
 
-          cp ui/flutter/lib-amd64/libgopeed.dylib ui/flutter/macos/Frameworks/libgopeed.dylib
-          cp ui/flutter/lib-amd64/host ui/flutter/assets/exec/host
-          cp ui/flutter/lib-amd64/updater ui/flutter/assets/exec/updater
+          cp ui/flutter_old/lib-amd64/libgopeed.dylib ui/flutter_old/macos/Frameworks/libgopeed.dylib
+          cp ui/flutter_old/lib-amd64/host ui/flutter_old/assets/exec/host
+          cp ui/flutter_old/lib-amd64/updater ui/flutter_old/assets/exec/updater
       - if: ${{ matrix.channel == 'universal' }}
         name: Build Universal Libraries
         run: |
-          mkdir -p ui/flutter/macos/Frameworks
+          mkdir -p ui/flutter_old/macos/Frameworks
 
           # arm64 lib
-          go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o ui/flutter/.temp/libgopeed.dylib.arm64 github.com/GopeedLab/gopeed/bind/desktop
-          go build -ldflags="-w -s" -o ui/flutter/.temp/host.arm64 github.com/GopeedLab/gopeed/cmd/host
-          go build -ldflags="-w -s" -o ui/flutter/.temp/updater.arm64 github.com/GopeedLab/gopeed/cmd/updater
+          go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o ui/flutter_old/.temp/libgopeed.dylib.arm64 github.com/GopeedLab/gopeed/bind/desktop
+          go build -ldflags="-w -s" -o ui/flutter_old/.temp/host.arm64 github.com/GopeedLab/gopeed/cmd/host
+          go build -ldflags="-w -s" -o ui/flutter_old/.temp/updater.arm64 github.com/GopeedLab/gopeed/cmd/updater
 
           # amd64 lib
-          cp ui/flutter/lib-amd64/libgopeed.dylib ui/flutter/.temp/libgopeed.dylib.amd64
-          cp ui/flutter/lib-amd64/host ui/flutter/.temp/host.amd64
-          cp ui/flutter/lib-amd64/updater ui/flutter/.temp/updater.amd64
+          cp ui/flutter_old/lib-amd64/libgopeed.dylib ui/flutter_old/.temp/libgopeed.dylib.amd64
+          cp ui/flutter_old/lib-amd64/host ui/flutter_old/.temp/host.amd64
+          cp ui/flutter_old/lib-amd64/updater ui/flutter_old/.temp/updater.amd64
 
           # universal lib
-          lipo -create -output ui/flutter/macos/Frameworks/libgopeed.dylib ui/flutter/.temp/libgopeed.dylib.arm64 ui/flutter/.temp/libgopeed.dylib.amd64
-          lipo -create -output ui/flutter/assets/exec/host ui/flutter/.temp/host.arm64 ui/flutter/.temp/host.amd64
-          lipo -create -output ui/flutter/assets/exec/updater ui/flutter/.temp/updater.arm64 ui/flutter/.temp/updater.amd64
+          lipo -create -output ui/flutter_old/macos/Frameworks/libgopeed.dylib ui/flutter_old/.temp/libgopeed.dylib.arm64 ui/flutter_old/.temp/libgopeed.dylib.amd64
+          lipo -create -output ui/flutter_old/assets/exec/host ui/flutter_old/.temp/host.arm64 ui/flutter_old/.temp/host.amd64
+          lipo -create -output ui/flutter_old/assets/exec/updater ui/flutter_old/.temp/updater.arm64 ui/flutter_old/.temp/updater.amd64
       - name: Build
         env:
           VERSION: ${{ needs.get-release.outputs.version }}
         run: |
-          cd ui/flutter
+          cd ui/flutter_old
           flutter build macos --dart-define="UPDATE_CHANNEL=macosDmg" --dart-define="GA4_MEASUREMENT_ID=${{ env.GA4_MEASUREMENT_ID }}" --dart-define="GA4_API_SECRET=${{ env.GA4_API_SECRET }}"
           cd build/macos/Build/Products/Release
           cat>appdmg.json<<EOF
@@ -301,11 +307,10 @@ jobs:
             mv dist/Gopeed-v$VERSION-macos.dmg dist/Gopeed-v$VERSION-macos-amd64.dmg
           fi
       - name: Upload
-        uses: shogo82148/actions-upload-release-asset@v1
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: ui/flutter/build/macos/Build/Products/Release/dist/*
-          overwrite: true
+          name: gopeed-macos-${{ matrix.channel }}-dmg
+          path: ui/flutter_old/build/macos/Build/Products/Release/dist/*
   build-linux:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux' }}
     runs-on: ${{ matrix.os }}
@@ -333,11 +338,11 @@ jobs:
         env:
           VERSION: ${{ needs.get-release.outputs.version }}
         run: |
-          go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o ui/flutter/linux/bundle/lib/libgopeed.so github.com/GopeedLab/gopeed/bind/desktop
-          go build -ldflags="-w -s" -o ui/flutter/assets/exec/host github.com/GopeedLab/gopeed/cmd/host
-          go build -ldflags="-w -s" -o ui/flutter/assets/exec/updater github.com/GopeedLab/gopeed/cmd/updater
+          go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o ui/flutter_old/linux/bundle/lib/libgopeed.so github.com/GopeedLab/gopeed/bind/desktop
+          go build -ldflags="-w -s" -o ui/flutter_old/assets/exec/host github.com/GopeedLab/gopeed/cmd/host
+          go build -ldflags="-w -s" -o ui/flutter_old/assets/exec/updater github.com/GopeedLab/gopeed/cmd/updater
 
-          cd ui/flutter
+          cd ui/flutter_old
 
           RPM_ARCH=$(uname -m)
           mkdir -p linux/packaging/rpm
@@ -403,7 +408,7 @@ jobs:
         uses: shogo82148/actions-upload-release-asset@v1
         with:
           upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: ui/flutter/dist/*/*
+          asset_path: ui/flutter_old/dist/*/*
           overwrite: true
   build-snap:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'snap' }}
@@ -426,10 +431,10 @@ jobs:
         env:
           VERSION: ${{ needs.get-release.outputs.version }}
         run: |
-          go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o ui/flutter/linux/bundle/lib/libgopeed.so github.com/GopeedLab/gopeed/bind/desktop
-          go build -ldflags="-w -s" -o ui/flutter/assets/exec/host github.com/GopeedLab/gopeed/cmd/host
-          go build -ldflags="-w -s" -o ui/flutter/assets/exec/updater github.com/GopeedLab/gopeed/cmd/updater
-          cd ui/flutter
+          go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o ui/flutter_old/linux/bundle/lib/libgopeed.so github.com/GopeedLab/gopeed/bind/desktop
+          go build -ldflags="-w -s" -o ui/flutter_old/assets/exec/host github.com/GopeedLab/gopeed/cmd/host
+          go build -ldflags="-w -s" -o ui/flutter_old/assets/exec/updater github.com/GopeedLab/gopeed/cmd/updater
+          cd ui/flutter_old
 
           sudo snap install snapcraft --classic
           mkdir -p snap/gui
@@ -576,8 +581,8 @@ jobs:
           go install golang.org/x/mobile/cmd/gomobile@latest
           go get golang.org/x/mobile/bind
           gomobile init
-          gomobile bind -tags nosqlite -ldflags="-w -s -checklinkname=0 -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -o ui/flutter/android/app/libs/libgopeed.aar -target=android -androidapi 21 -javapkg=com.gopeed github.com/GopeedLab/gopeed/bind/mobile
-          cd ui/flutter
+          gomobile bind -tags nosqlite -ldflags="-w -s -checklinkname=0 -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -o ui/flutter_old/android/app/libs/libgopeed.aar -target=android -androidapi 21 -javapkg=com.gopeed github.com/GopeedLab/gopeed/bind/mobile
+          cd ui/flutter_old
           echo $APK_KEYSTORE | base64 -di > android/app/upload-keystore.jks
           flutter build apk --dart-define="UPDATE_CHANNEL=androidApk" --dart-define="GA4_MEASUREMENT_ID=${{ env.GA4_MEASUREMENT_ID }}" --dart-define="GA4_API_SECRET=${{ env.GA4_API_SECRET }}"
           flutter build apk --split-per-abi --dart-define="UPDATE_CHANNEL=androidApk" --dart-define="GA4_MEASUREMENT_ID=${{ env.GA4_MEASUREMENT_ID }}" --dart-define="GA4_API_SECRET=${{ env.GA4_API_SECRET }}"
@@ -590,7 +595,7 @@ jobs:
         uses: shogo82148/actions-upload-release-asset@v1
         with:
           upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: ui/flutter/dist/*
+          asset_path: ui/flutter_old/dist/*
           overwrite: true
   build-ios:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios' }}
@@ -611,8 +616,8 @@ jobs:
           go install golang.org/x/mobile/cmd/gomobile@latest
           go get golang.org/x/mobile/bind
           gomobile init
-          gomobile bind -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -o ui/flutter/ios/Frameworks/Libgopeed.xcframework -target=ios github.com/GopeedLab/gopeed/bind/mobile
-          cd ui/flutter
+          gomobile bind -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -o ui/flutter_old/ios/Frameworks/Libgopeed.xcframework -target=ios github.com/GopeedLab/gopeed/bind/mobile
+          cd ui/flutter_old
           flutter build ios --no-codesign --dart-define="UPDATE_CHANNEL=iosIpa" --dart-define="GA4_MEASUREMENT_ID=${{ env.GA4_MEASUREMENT_ID }}" --dart-define="GA4_API_SECRET=${{ env.GA4_API_SECRET }}"
           mkdir Payload
           cp -r build/ios/iphoneos/Runner.app Payload
@@ -623,7 +628,7 @@ jobs:
         uses: shogo82148/actions-upload-release-asset@v1
         with:
           upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: ui/flutter/dist/*
+          asset_path: ui/flutter_old/dist/*
           overwrite: true
   build-web:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'web' || github.event.inputs.platform == 'qnap' }}
@@ -641,11 +646,11 @@ jobs:
         env:
           VERSION: ${{ needs.get-release.outputs.version }}
         run: |
-          cd ui/flutter
+          cd ui/flutter_old
           flutter build web --no-web-resources-cdn --dart-define="GA4_MEASUREMENT_ID=${{ env.GA4_MEASUREMENT_ID }}" --dart-define="GA4_API_SECRET=${{ env.GA4_API_SECRET }}"
           dart ../../.github/workflows/scripts/flutter_local_font.dart
           cd ../../
-          cp -r ui/flutter/build/web cmd/web/dist
+          cp -r ui/flutter_old/build/web cmd/web/dist
           mkdir -p dist/zip
 
           goos_arr=(windows darwin linux)
@@ -761,12 +766,12 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Build flutter web
         run: |
-          cd ui/flutter
+          cd ui/flutter_old
           flutter build web --no-web-resources-cdn --dart-define="UPDATE_CHANNEL=docker" --dart-define="GA4_MEASUREMENT_ID=${{ env.GA4_MEASUREMENT_ID }}" --dart-define="GA4_API_SECRET=${{ env.GA4_API_SECRET }}"
           dart ../../.github/workflows/scripts/flutter_local_font.dart
           cd ../../
           rm -rf cmd/web/dist
-          cp -r ui/flutter/build/web cmd/web/dist
+          cp -r ui/flutter_old/build/web cmd/web/dist
       - name: Build and push
         uses: docker/build-push-action@v2
         env:
