@@ -22,7 +22,7 @@ abstract class TaskListController extends GetxController {
     super.onInit();
 
     start();
-    _timer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+    _timer = Timer.periodic(const Duration(seconds: 2), (timer) async {
       if (isRunning.value) {
         await getTasksState();
       }
