@@ -137,15 +137,9 @@ class AppController extends GetxController with WindowListener, TrayListener {
   @override
   void onWindowClose() async {
     final isPreventClose = await windowManager.isPreventClose();
-    if (!isPreventClose) {
-      return;
-    }
-    // Menubar mode expects the app to stay resident after the window closes.
-    if (Util.isMacos() && Database.instance.getRunAsMenubarApp()) {
+    if (isPreventClose) {
       windowManager.hide();
-      return;
     }
-    await _exitApp();
   }
 
   Future<void> _exitApp() async {
