@@ -6,7 +6,16 @@ import 'package:desktop_multi_window/desktop_multi_window.dart' as multi_window;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'
-    show Clipboard, FilteringTextInputFormatter, TextInputAction, TextInputType, TextInputFormatter;
+    show
+        Clipboard,
+        FilteringTextInputFormatter,
+        HardwareKeyboard,
+        KeyDownEvent,
+        KeyEvent,
+        LogicalKeyboardKey,
+        TextInputAction,
+        TextInputFormatter,
+        TextInputType;
 import 'package:flutter/widgets.dart' as flutter show Flexible, Row;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -166,6 +175,25 @@ class _CreateTaskWindowPageState extends ConsumerState<CreateTaskWindowPage> {
     _recognizeMagnetUri(_urlController.text.trim());
   }
 
+  KeyEventResult _handleUrlFieldKeyEvent(FocusNode node, KeyEvent event) {
+    if (event.logicalKey != LogicalKeyboardKey.enter && event.logicalKey != LogicalKeyboardKey.numpadEnter) {
+      return KeyEventResult.ignored;
+    }
+    // While an IME is composing, Enter confirms the composition instead of submitting.
+    if (_urlController.value.composing.isValid) {
+      return KeyEventResult.ignored;
+    }
+    // Shift+Enter keeps the multiline behavior for entering multiple links.
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isShiftPressed || keyboard.isControlPressed || keyboard.isAltPressed || keyboard.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+    if (event is KeyDownEvent) {
+      unawaited(_confirm());
+    }
+    return KeyEventResult.handled;
+  }
+
   void _applyInitialTask(CreateTask? task) {
     if (task == null || !mounted) return;
     final req = task.req;
@@ -311,21 +339,30 @@ class _CreateTaskWindowPageState extends ConsumerState<CreateTaskWindowPage> {
                             children: [
                               SizedBox(
                                 height: 120,
-                                child: TextField(
-                                  controller: _urlController,
-                                  hintText: context.l10n.pasteDownloadLinks,
-                                  keyboardType: TextInputType.multiline,
-                                  textInputAction: TextInputAction.newline,
-                                  maxLines: null,
-                                  minLines: null,
-                                  expands: true,
-                                  textAlignVertical: TextAlignVertical.top,
-                                  filled: true,
-                                  border: Border.all(
-                                    color: _draggingTorrent ? palette.brand : palette.border,
-                                    width: _draggingTorrent ? 0 : 1,
+                                // Bare Enter submits instead of inserting a newline. It must be
+                                // intercepted here, before the root-level text-editing shortcut
+                                // that forwards Enter to the platform IME as a line break.
+                                child: Focus(
+                                  canRequestFocus: false,
+                                  skipTraversal: true,
+                                  onKeyEvent: _handleUrlFieldKeyEvent,
+                                  child: TextField(
+                                    key: const ValueKey('create-task-url-input'),
+                                    controller: _urlController,
+                                    hintText: context.l10n.pasteDownloadLinks,
+                                    keyboardType: TextInputType.multiline,
+                                    textInputAction: TextInputAction.newline,
+                                    maxLines: null,
+                                    minLines: null,
+                                    expands: true,
+                                    textAlignVertical: TextAlignVertical.top,
+                                    filled: true,
+                                    border: Border.all(
+                                      color: _draggingTorrent ? palette.brand : palette.border,
+                                      width: _draggingTorrent ? 0 : 1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(4),
                                   ),
-                                  borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
                               Positioned(

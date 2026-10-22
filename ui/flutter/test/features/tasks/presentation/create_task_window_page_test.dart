@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter/widgets.dart' as flutter show Row;
 import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -265,6 +266,66 @@ void main() {
     expect(options.archivePassword, 'archive-password');
     expect(options.deleteAfterExtract, isTrue);
     expect(submitted?.opts?.asDefaultPath, isTrue);
+  });
+
+  testWidgets('pressing enter in the url field submits while shift+enter inserts a newline', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1024, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CreateTask? submitted;
+    final config = DownloaderConfig(downloadDir: 'C:/Downloads')..extra.defaultDirectDownload = true;
+    final registry = CapabilityRegistry(createAppCapabilityCodecs())
+      ..bind(GopeedMethods.getConfig, (_) => config)
+      ..bind(GopeedMethods.createTask, (task) {
+        submitted = task;
+        return 'created-task';
+      })
+      ..bind(StorageMethods.saveCreateHistory, (_) => const RpcUnit());
+    final capabilities = AppCapabilities(LocalCapabilityInvoker(registry));
+
+    final router = GoRouter(
+      initialLocation: '/create',
+      routes: [
+        GoRoute(path: '/', builder: (_, _) => const SizedBox()),
+        GoRoute(path: '/create', builder: (_, _) => const CreateTaskWindowPage()),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appCapabilitiesProvider.overrideWithValue(capabilities)],
+        child: shad.ShadcnApp.router(
+          theme: AppTheme.light(),
+          materialTheme: AppTheme.materialLight(),
+          builder: (context, child) => AppComponentThemes(child: child ?? const SizedBox.shrink()),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final urlField = find.descendant(
+      of: find.byKey(const ValueKey('create-task-url-input')),
+      matching: find.byType(EditableText),
+    );
+    await tester.enterText(urlField, 'https://example.com/file.zip');
+    await tester.pump();
+
+    // Shift+Enter must not submit; it stays available for multi-line batch input.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(submitted, isNull);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(submitted?.req?.url, 'https://example.com/file.zip');
   });
 
   testWidgets('create history supports filtering, deleting one entry, and clearing all entries', (

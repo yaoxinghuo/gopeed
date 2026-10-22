@@ -25,6 +25,8 @@ bin/
 
 .DS_Store
 
+AGENTS.local.md
+
 node_modules/
 cmd/web/dist/
 .test_storage/
