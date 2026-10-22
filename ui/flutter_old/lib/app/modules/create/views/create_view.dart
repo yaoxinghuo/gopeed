@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:contentsize_tabbarview/contentsize_tabbarview.dart';
@@ -201,36 +202,43 @@ class CreateView extends GetView<CreateController> {
                   children: [
                     Row(children: [
                       Expanded(
-                        child: TextFormField(
-                          autofocus: !Util.isMobile(),
-                          controller: _urlController,
-                          minLines: 1,
-                          maxLines: 5,
-                          decoration: InputDecoration(
-                            hintText: _hitText(),
-                            hintStyle: const TextStyle(fontSize: 12),
-                            labelText: 'downloadLink'.tr,
-                            icon: const Icon(Icons.link),
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                _urlController.clear();
-                                controller.clearFileDataUri();
-                              },
-                              icon: const Icon(Icons.clear),
+                        child: Focus(
+                          onKeyEvent: _handleUrlFieldKeyEvent,
+                          child: TextFormField(
+                            autofocus: !Util.isMobile(),
+                            controller: _urlController,
+                            inputFormatters: [
+                              TextInputFormatter.withFunction(
+                                  _filterEnterToSubmit)
+                            ],
+                            minLines: 1,
+                            maxLines: 5,
+                            decoration: InputDecoration(
+                              hintText: _hitText(),
+                              hintStyle: const TextStyle(fontSize: 12),
+                              labelText: 'downloadLink'.tr,
+                              icon: const Icon(Icons.link),
+                              suffixIcon: IconButton(
+                                onPressed: () {
+                                  _urlController.clear();
+                                  controller.clearFileDataUri();
+                                },
+                                icon: const Icon(Icons.clear),
+                              ),
                             ),
+                            validator: (v) {
+                              return v!.trim().isNotEmpty
+                                  ? null
+                                  : 'downloadLinkValid'.tr;
+                            },
+                            onChanged: (v) async {
+                              controller.clearFileDataUri();
+                              if (controller.oldUrl.value.isEmpty) {
+                                recognizeMagnetUri(v);
+                              }
+                              controller.oldUrl.value = v;
+                            },
                           ),
-                          validator: (v) {
-                            return v!.trim().isNotEmpty
-                                ? null
-                                : 'downloadLinkValid'.tr;
-                          },
-                          onChanged: (v) async {
-                            controller.clearFileDataUri();
-                            if (controller.oldUrl.value.isEmpty) {
-                              recognizeMagnetUri(v);
-                            }
-                            controller.oldUrl.value = v;
-                          },
                         ),
                       ),
                       IconButton(
@@ -824,6 +832,57 @@ class CreateView extends GetView<CreateController> {
       _urlController.selection = TextSelection.fromPosition(
           TextPosition(offset: _urlController.text.length));
     }
+  }
+
+  KeyEventResult _handleUrlFieldKeyEvent(FocusNode node, KeyEvent event) {
+    if (event.logicalKey != LogicalKeyboardKey.enter &&
+        event.logicalKey != LogicalKeyboardKey.numpadEnter) {
+      return KeyEventResult.ignored;
+    }
+    if (_shouldInsertNewlineInstead()) {
+      return KeyEventResult.ignored;
+    }
+    if (event is KeyDownEvent) {
+      unawaited(_doConfirm());
+    }
+    return KeyEventResult.handled;
+  }
+
+  // Whether the current Enter keypress should keep its multiline behavior:
+  // while an IME is composing (Enter confirms the composition) or when a
+  // modifier is held (Shift+Enter inserts a newline for batch links).
+  bool _shouldInsertNewlineInstead() {
+    final composing = _urlController.value.composing;
+    if (composing.isValid && !composing.isCollapsed) {
+      return true;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    return keyboard.isShiftPressed ||
+        keyboard.isControlPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isMetaPressed;
+  }
+
+  // Fallback for platforms where the Enter key never reaches the focus chain
+  // (e.g. delivered only through the text-input channel): a bare Enter always
+  // produces exactly one '\n' at the caret, while pastes insert longer text
+  // that may legitimately contain newlines.
+  TextEditingValue _filterEnterToSubmit(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final text = newValue.text;
+    final caret = newValue.selection.extentOffset;
+    final isSingleNewlineInsert = newValue.selection.isCollapsed &&
+        caret > 0 &&
+        text.length == oldValue.text.length + 1 &&
+        text.codeUnitAt(caret - 1) == 0x0A &&
+        text.substring(0, caret - 1) + text.substring(caret) == oldValue.text;
+    if (!isSingleNewlineInsert || _shouldInsertNewlineInstead()) {
+      return newValue;
+    }
+    // Strip the newline that was already committed and submit afterwards, so
+    // the text update finishes first.
+    scheduleMicrotask(() => unawaited(_doConfirm()));
+    return oldValue;
   }
 
   Future<void> _doConfirm() async {
