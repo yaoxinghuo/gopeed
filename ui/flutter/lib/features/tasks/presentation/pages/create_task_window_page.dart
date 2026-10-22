@@ -13,6 +13,7 @@ import 'package:flutter/services.dart'
         KeyDownEvent,
         KeyEvent,
         LogicalKeyboardKey,
+        TextEditingValue,
         TextInputAction,
         TextInputFormatter,
         TextInputType;
@@ -179,19 +180,46 @@ class _CreateTaskWindowPageState extends ConsumerState<CreateTaskWindowPage> {
     if (event.logicalKey != LogicalKeyboardKey.enter && event.logicalKey != LogicalKeyboardKey.numpadEnter) {
       return KeyEventResult.ignored;
     }
-    // While an IME is composing, Enter confirms the composition instead of submitting.
-    if (_urlController.value.composing.isValid) {
-      return KeyEventResult.ignored;
-    }
-    // Shift+Enter keeps the multiline behavior for entering multiple links.
-    final keyboard = HardwareKeyboard.instance;
-    if (keyboard.isShiftPressed || keyboard.isControlPressed || keyboard.isAltPressed || keyboard.isMetaPressed) {
+    if (_shouldInsertNewlineInstead()) {
       return KeyEventResult.ignored;
     }
     if (event is KeyDownEvent) {
       unawaited(_confirm());
     }
     return KeyEventResult.handled;
+  }
+
+  // Whether the current Enter keypress should keep its multiline behavior:
+  // while an IME is composing (Enter confirms the composition) or when a
+  // modifier is held (Shift+Enter inserts a newline for batch links).
+  bool _shouldInsertNewlineInstead() {
+    final composing = _urlController.value.composing;
+    if (composing.isValid && !composing.isCollapsed) {
+      return true;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    return keyboard.isShiftPressed || keyboard.isControlPressed || keyboard.isAltPressed || keyboard.isMetaPressed;
+  }
+
+  // Fallback for platforms where the Enter key never reaches the focus chain
+  // (e.g. delivered only through the text-input channel): a bare Enter always
+  // produces exactly one '\n' at the caret, while pastes/autocomplete insert
+  // longer text that may legitimately contain newlines.
+  TextEditingValue _filterEnterToSubmit(TextEditingValue oldValue, TextEditingValue newValue) {
+    final text = newValue.text;
+    final caret = newValue.selection.extentOffset;
+    final isSingleNewlineInsert = newValue.selection.isCollapsed &&
+        caret > 0 &&
+        text.length == oldValue.text.length + 1 &&
+        text.codeUnitAt(caret - 1) == 0x0A &&
+        text.substring(0, caret - 1) + text.substring(caret) == oldValue.text;
+    if (!isSingleNewlineInsert || _shouldInsertNewlineInstead()) {
+      return newValue;
+    }
+    // Strip the newline that was already committed and submit afterwards, so
+    // the text update finishes first.
+    scheduleMicrotask(() => unawaited(_confirm()));
+    return oldValue;
   }
 
   void _applyInitialTask(CreateTask? task) {
@@ -349,6 +377,7 @@ class _CreateTaskWindowPageState extends ConsumerState<CreateTaskWindowPage> {
                                   child: TextField(
                                     key: const ValueKey('create-task-url-input'),
                                     controller: _urlController,
+                                    inputFormatters: [TextInputFormatter.withFunction(_filterEnterToSubmit)],
                                     hintText: context.l10n.pasteDownloadLinks,
                                     keyboardType: TextInputType.multiline,
                                     textInputAction: TextInputAction.newline,
