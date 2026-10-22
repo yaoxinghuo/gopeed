@@ -6,17 +6,7 @@ import 'package:desktop_multi_window/desktop_multi_window.dart' as multi_window;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'
-    show
-        Clipboard,
-        FilteringTextInputFormatter,
-        HardwareKeyboard,
-        KeyDownEvent,
-        KeyEvent,
-        LogicalKeyboardKey,
-        TextEditingValue,
-        TextInputAction,
-        TextInputFormatter,
-        TextInputType;
+    show Clipboard, FilteringTextInputFormatter, TextInputAction, TextInputType, TextInputFormatter;
 import 'package:flutter/widgets.dart' as flutter show Flexible, Row;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -176,52 +166,6 @@ class _CreateTaskWindowPageState extends ConsumerState<CreateTaskWindowPage> {
     _recognizeMagnetUri(_urlController.text.trim());
   }
 
-  KeyEventResult _handleUrlFieldKeyEvent(FocusNode node, KeyEvent event) {
-    if (event.logicalKey != LogicalKeyboardKey.enter && event.logicalKey != LogicalKeyboardKey.numpadEnter) {
-      return KeyEventResult.ignored;
-    }
-    if (_shouldInsertNewlineInstead()) {
-      return KeyEventResult.ignored;
-    }
-    if (event is KeyDownEvent) {
-      unawaited(_confirm());
-    }
-    return KeyEventResult.handled;
-  }
-
-  // Whether the current Enter keypress should keep its multiline behavior:
-  // while an IME is composing (Enter confirms the composition) or when a
-  // modifier is held (Shift+Enter inserts a newline for batch links).
-  bool _shouldInsertNewlineInstead() {
-    final composing = _urlController.value.composing;
-    if (composing.isValid && !composing.isCollapsed) {
-      return true;
-    }
-    final keyboard = HardwareKeyboard.instance;
-    return keyboard.isShiftPressed || keyboard.isControlPressed || keyboard.isAltPressed || keyboard.isMetaPressed;
-  }
-
-  // Fallback for platforms where the Enter key never reaches the focus chain
-  // (e.g. delivered only through the text-input channel): a bare Enter always
-  // produces exactly one '\n' at the caret, while pastes/autocomplete insert
-  // longer text that may legitimately contain newlines.
-  TextEditingValue _filterEnterToSubmit(TextEditingValue oldValue, TextEditingValue newValue) {
-    final text = newValue.text;
-    final caret = newValue.selection.extentOffset;
-    final isSingleNewlineInsert = newValue.selection.isCollapsed &&
-        caret > 0 &&
-        text.length == oldValue.text.length + 1 &&
-        text.codeUnitAt(caret - 1) == 0x0A &&
-        text.substring(0, caret - 1) + text.substring(caret) == oldValue.text;
-    if (!isSingleNewlineInsert || _shouldInsertNewlineInstead()) {
-      return newValue;
-    }
-    // Strip the newline that was already committed and submit afterwards, so
-    // the text update finishes first.
-    scheduleMicrotask(() => unawaited(_confirm()));
-    return oldValue;
-  }
-
   void _applyInitialTask(CreateTask? task) {
     if (task == null || !mounted) return;
     final req = task.req;
@@ -367,31 +311,21 @@ class _CreateTaskWindowPageState extends ConsumerState<CreateTaskWindowPage> {
                             children: [
                               SizedBox(
                                 height: 120,
-                                // Bare Enter submits instead of inserting a newline. It must be
-                                // intercepted here, before the root-level text-editing shortcut
-                                // that forwards Enter to the platform IME as a line break.
-                                child: Focus(
-                                  canRequestFocus: false,
-                                  skipTraversal: true,
-                                  onKeyEvent: _handleUrlFieldKeyEvent,
-                                  child: TextField(
-                                    key: const ValueKey('create-task-url-input'),
-                                    controller: _urlController,
-                                    inputFormatters: [TextInputFormatter.withFunction(_filterEnterToSubmit)],
-                                    hintText: context.l10n.pasteDownloadLinks,
-                                    keyboardType: TextInputType.multiline,
-                                    textInputAction: TextInputAction.newline,
-                                    maxLines: null,
-                                    minLines: null,
-                                    expands: true,
-                                    textAlignVertical: TextAlignVertical.top,
-                                    filled: true,
-                                    border: Border.all(
-                                      color: _draggingTorrent ? palette.brand : palette.border,
-                                      width: _draggingTorrent ? 0 : 1,
-                                    ),
-                                    borderRadius: BorderRadius.circular(4),
+                                child: TextField(
+                                  controller: _urlController,
+                                  hintText: context.l10n.pasteDownloadLinks,
+                                  keyboardType: TextInputType.multiline,
+                                  textInputAction: TextInputAction.newline,
+                                  maxLines: null,
+                                  minLines: null,
+                                  expands: true,
+                                  textAlignVertical: TextAlignVertical.top,
+                                  filled: true,
+                                  border: Border.all(
+                                    color: _draggingTorrent ? palette.brand : palette.border,
+                                    width: _draggingTorrent ? 0 : 1,
                                   ),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
                               Positioned(
